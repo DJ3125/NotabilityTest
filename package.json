@@ -10,6 +10,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "bplist-parser": "^0.3.2"
+    "bplist-parser": "^0.3.2",
+    "pdf-lib": "^1.17.1"
   }
 }
