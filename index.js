@@ -10,7 +10,23 @@ async function run(){
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
   
-  console.log(drawing);
+  const shapesRaw = drawing["shapes"];
+
+  const shapesPList = (await bplist.parseFile(shapesRaw))[0];
+
+  console.log(shapesPList.shapes[0].rotatedRect, shapesPList.kinds);
+  
+  await writeFile("./shapes.txt", shapesRaw.toString("base64"));
+
+  //const shapesProcesses = [];
+
+  //for(let i = 0; i < shapesRaw.length; i+=4){
+  //  shapesProcesses.push(shapesRaw.readFloatLE(i));
+  //}
+
+  //console.log(shapesProcesses);
+
+  //console.log(drawing);
 
   const pointSegmentsRaw = drawing["curvesnumpoints"];
   const pointsRaw = drawing["curvespoints"];
