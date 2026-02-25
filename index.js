@@ -11,9 +11,12 @@ async function run(){
   
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
+  
+  console.log(drawing);
 
   const pointSegmentsRaw = drawing["curvesnumpoints"];
   const pointsRaw = drawing["curvespoints"];
+  
   const segments = [];
   
   
@@ -61,9 +64,10 @@ async function run(){
   //const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
   //const page = pdfDoc.getPage(0);
   
-  
+  const rawWidths = drawing["curveswidth"];
 
-  for (const segment of segments) {
+  for (let j = 0; j < segments.length; j++) {
+    const segment = segments[j];
     for (let i = 0; i < segment.length - 1; i++) {
       const start = segment[i];
       const end = segment[i + 1];
@@ -76,7 +80,7 @@ async function run(){
       pdfDoc.getPage(start.page).drawLine({
         start: { x: start.x + offsetX, y: pageHeight - start.y - offsetY}, // flip Y
         end: { x: end.x + offsetX, y: pageHeight - end.y - offsetY},
-        thickness: 1,
+        thickness: rawWidths.readFloatLE(j * 4),
         color: rgb(0, 0, 0),
       });
     }
