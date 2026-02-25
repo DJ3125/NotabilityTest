@@ -4,10 +4,8 @@ import {PDFDocument, rgb} from "pdf-lib";
 
 async function run(){
   const newObj = await extract("./Session.plist");
-  
   const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
   
-  await writeFile("./write.json", JSON.stringify(writingData, null, 2));
   
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
@@ -18,10 +16,6 @@ async function run(){
   const pointsRaw = drawing["curvespoints"];
   
   const segments = [];
-  
-  
-  //const offsetX = 17; // adjust if your coordinates are negative
-  //const offsetY = 1;
   
   const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
   const pageHeight = pdfDoc.getPage(0).getHeight();
@@ -56,24 +50,15 @@ async function run(){
     }
   }
   
-  
-  
-  //await writeFile("./res64.txt", drawing["curvespoints"].toString("base64"));
-  //await writeFile("./res2_64.txt", drawing["curvesnumpoints"].toString("base64"));
-  
-  //const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
-  //const page = pdfDoc.getPage(0);
-  
   const rawWidths = drawing["curveswidth"];
+  const rawColors = drawing["curvescolors"];
 
   for (let j = 0; j < segments.length; j++) {
     const segment = segments[j];
     for (let i = 0; i < segment.length - 1; i++) {
       const start = segment[i];
       const end = segment[i + 1];
-      
-      
-      
+ 
       const offsetX = 17 + writingData["" + (start.page + 1)]["pageContentOrigin"][0] - vals[start.page].minx;
       const offsetY = 2 + writingData["" + (start.page + 1)]["pageContentOrigin"][1] - vals[start.page].miny;
 
@@ -81,7 +66,8 @@ async function run(){
         start: { x: start.x + offsetX, y: pageHeight - start.y - offsetY}, // flip Y
         end: { x: end.x + offsetX, y: pageHeight - end.y - offsetY},
         thickness: rawWidths.readFloatLE(j * 4),
-        color: rgb(0, 0, 0),
+        color: rgb(rawColors.readUint8(j * 4)/255, rawColors.readUint8(j * 4 + 1)/255, rawColors.readUint8(j * 4 + 2)/255),
+        opacity: rawColors.readUint8(j * 4 + 3)/255,
       });
     }
   }
