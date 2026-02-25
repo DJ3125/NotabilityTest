@@ -1,1 +1,9 @@
 node_modules/
+
+/*.plist
+/*.pdf
+/*.txt
+
+*.json
+!package.json
+!package-lock.json

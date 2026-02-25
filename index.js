@@ -3,7 +3,98 @@ import {writeFile, readFile} from "node:fs/promises";
 import {PDFDocument, rgb} from "pdf-lib";
 
 async function run(){
-  const obj = (await bplist.parseFile('./Session.plist'))[0]["$objects"];
+  const newObj = await extract("./Session.plist");
+  
+  const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
+  
+  await writeFile("./write.json", JSON.stringify(writingData, null, 2));
+  
+  
+  const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
+
+  const pointSegmentsRaw = drawing["curvesnumpoints"];
+  const pointsRaw = drawing["curvespoints"];
+  const segments = [];
+  
+  
+  //const offsetX = 17; // adjust if your coordinates are negative
+  //const offsetY = 1;
+  
+  const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
+  const pageHeight = pdfDoc.getPage(0).getHeight();
+  
+  const vals = new Array(9);
+  for(let i = 0; i < 9; i++){
+    vals[i] = {};
+    vals[i].minx = null;
+    vals[i].miny = null;
+    vals[i].maxx = null;
+    vals[i].maxy = null;
+  }
+  
+  {
+    let index = 0;
+    for(let i = 0; i < pointSegmentsRaw.length; i+=4){
+      const tmp = [];
+      for(let j = 0; j < pointSegmentsRaw.readUint32LE(i); j++){
+        const x = pointsRaw.readFloatLE(index);
+        const y = (pointsRaw.readFloatLE(index+4)) % pageHeight;
+        const page = Math.floor((pointsRaw.readFloatLE(index+4)) / pageHeight);
+        tmp.push({x, y, page});
+        
+        vals[page].minx = vals[page].minx === null ? x : Math.min(x, vals[page].minx);
+        vals[page].maxx = vals[page].maxx === null ? x : Math.max(x, vals[page].maxx);
+        vals[page].miny = vals[page].miny === null ? y : Math.min(y, vals[page].miny);
+        vals[page].maxy = vals[page].maxy === null ? y : Math.max(y, vals[page].maxy);
+        
+        index += 8;
+      }
+      segments.push(tmp);
+    }
+  }
+  
+  
+  
+  //await writeFile("./res64.txt", drawing["curvespoints"].toString("base64"));
+  //await writeFile("./res2_64.txt", drawing["curvesnumpoints"].toString("base64"));
+  
+  //const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
+  //const page = pdfDoc.getPage(0);
+  
+  
+
+  for (const segment of segments) {
+    for (let i = 0; i < segment.length - 1; i++) {
+      const start = segment[i];
+      const end = segment[i + 1];
+      
+      
+      
+      const offsetX = 17 + writingData["" + (start.page + 1)]["pageContentOrigin"][0] - vals[start.page].minx;
+      const offsetY = 2 + writingData["" + (start.page + 1)]["pageContentOrigin"][1] - vals[start.page].miny;
+
+      pdfDoc.getPage(start.page).drawLine({
+        start: { x: start.x + offsetX, y: pageHeight - start.y - offsetY}, // flip Y
+        end: { x: end.x + offsetX, y: pageHeight - end.y - offsetY},
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+    }
+  }
+
+// --- Save new PDF ---
+  const pdfBytes = await pdfDoc.save();
+  await writeFile("output_strokes.pdf", pdfBytes);
+  console.log("PDF saved with strokes!");
+  
+  
+  await writeFile("./res.json", JSON.stringify(newObj, null, 2));
+  console.log("done");
+
+}
+
+async function extract(file){
+  const obj = (await bplist.parseFile(file))[0]["$objects"];
   
   //Replaces all UID with the correct data
   //const newObj = {};
@@ -24,65 +115,7 @@ async function run(){
     }
     newObj[i.$class.$classname] = i;
   }
-  
-  const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
-  
-  //console.log(drawing["curvesnumpoints"].buffer, drawing["curvesnumpoints"].byteOffset);
-  
-  const pointSegmentsRaw = drawing["curvesnumpoints"];
-  const pointSegments = [];
-  for(let i = 0; i < pointSegmentsRaw.length; i+=4){
-    pointSegments.push(pointSegmentsRaw.readUint32LE(i));
-  }
-  
-  //console.log(pointSegments);
-
-  const pointsRaw = drawing["curvespoints"];
-  
-  const points = [];
-  for(let i = 0; i < pointsRaw.length; i+=8){
-    points.push({x: pointsRaw.readFloatLE(i), y: pointsRaw.readFloatLE(i+4)});
-  }
-  
-  const segments = [];
-  for(const i of pointSegments){
-    segments.push(points.splice(0, i));
-  }
-  
-  
-  
-  await writeFile("./res64.txt", drawing["curvespoints"].toString("base64"));
-  await writeFile("./res2_64.txt", drawing["curvesnumpoints"].toString("base64"));
-  
-  const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
-  const page = pdfDoc.getPage(0);
-  
-  const offsetX = 10; // adjust if your coordinates are negative
-  const offsetY = 1;
-
-  for (const segment of segments) {
-    for (let i = 0; i < segment.length - 1; i++) {
-      const start = segment[i];
-      const end = segment[i + 1];
-
-      page.drawLine({
-        start: { x: start.x + offsetX, y: page.getHeight() - (start.y + offsetY) }, // flip Y
-        end: { x: end.x + offsetX, y: page.getHeight() - (end.y + offsetY) },
-        thickness: 1,
-        color: rgb(0, 0, 0),
-      });
-    }
-  }
-
-// --- Save new PDF ---
-  const pdfBytes = await pdfDoc.save();
-  await writeFile("output_strokes.pdf", pdfBytes);
-  console.log("PDF saved with strokes!");
-  
-  
-  await writeFile("./res.json", JSON.stringify(newObj, null, 2));
-  console.log("done");
-
+  return newObj;
 }
 
 run();
