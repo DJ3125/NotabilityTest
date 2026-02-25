@@ -10,13 +10,12 @@ async function run(){
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
   
-  const shapesRaw = drawing["shapes"];
 
-  const shapesPList = (await bplist.parseFile(shapesRaw))[0];
+  const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
 
-  console.log(shapesPList.shapes[0].rotatedRect, shapesPList.kinds);
+  console.log(shapesPList.shapes[1].rotatedRect.corners);
   
-  await writeFile("./shapes.txt", shapesRaw.toString("base64"));
+  //await writeFile("./shapes.txt", shapesRaw.toString("base64"));
 
   //const shapesProcesses = [];
 
@@ -87,6 +86,29 @@ async function run(){
       });
     }
   }
+
+  for(let i = 0; i < shapesPList.shapes.length; i++){
+    if(shapesPList.kinds[i] === "circle"){
+      const circle = shapesPList.shapes[i];
+      const page = Math.floor(circle.rect[0][1] / pageHeight);
+      const y = circle.rect[0][1] % pageHeight + 2 + writingData["" + (page + 1)]["pageContentOrigin"][1] - vals[page].miny;
+      const x = circle.rect[0][0] + 17 + writingData["" + (page + 1)]["pageContentOrigin"][0] - vals[page].minx;
+      
+      pdfDoc.getPage(page).drawEllipse({
+        x,
+        y: pageHeight -y,
+        xScale: circle.rect[1][0],
+        yScale: circle.rect[1][1]
+      });
+
+      continue;
+    }
+    const corners = shapesPList.shapes.rotatedRect.corners;
+    for(let j = 0; j < corners.length; j++){
+      
+    }
+  }
+  
 
 // --- Save new PDF ---
   const pdfBytes = await pdfDoc.save();
