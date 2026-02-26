@@ -4,7 +4,11 @@ import {PDFDocument, rgb} from "pdf-lib";
 
 async function run(){
   const newObj = await extract("./Session.plist");
-  const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
+  //const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
+  
+  await writeFile("./textbox.json", JSON.stringify(newObj, null, 2));
+  
+  return;
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
   const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
@@ -132,8 +136,27 @@ async function run(){
 async function extract(file){
   const obj = (await bplist.parseFile(file))[0]["$objects"];
   
+  //await writeFile("./textboxRaw.json", JSON.stringify(obj, null, 2));
+  
+  
   //Replaces all UID with the correct data
   //const newObj = {};
+  
+  const objsForReplacement = [];
+  
+  for(const i of obj){
+    if(!((typeof i === "object") || (typeof i === "array"))){continue;}
+    objsForReplacement.push(i);
+  }
+  
+  while(objsForReplacement.length > 0){
+    const tmp = [];
+    for(const i of objsForReplacement){
+      
+    }
+  
+  }
+  
   for(const i of obj){
     
     if(typeof i !== "object"){continue;}
