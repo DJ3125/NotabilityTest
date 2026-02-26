@@ -6,26 +6,8 @@ async function run(){
   const newObj = await extract("./Session.plist");
   const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
   
-  
-  
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
-  
-
   const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
-
-  console.log(shapesPList.shapes[1].rotatedRect.corners);
-  
-  //await writeFile("./shapes.txt", shapesRaw.toString("base64"));
-
-  //const shapesProcesses = [];
-
-  //for(let i = 0; i < shapesRaw.length; i+=4){
-  //  shapesProcesses.push(shapesRaw.readFloatLE(i));
-  //}
-
-  //console.log(shapesProcesses);
-
-  //console.log(drawing);
 
   const pointSegmentsRaw = drawing["curvesnumpoints"];
   const pointsRaw = drawing["curvespoints"];
@@ -43,7 +25,7 @@ async function run(){
     vals[i].maxx = null;
     vals[i].maxy = null;
   }
-  
+  console.log("getting mins and max");
   {
     let index = 0;
     for(let i = 0; i < pointSegmentsRaw.length; i+=4){
@@ -68,6 +50,8 @@ async function run(){
   const rawWidths = drawing["curveswidth"];
   const rawColors = drawing["curvescolors"];
 
+  console.log("drawing segments");
+
   for (let j = 0; j < segments.length; j++) {
     const segment = segments[j];
     for (let i = 0; i < segment.length - 1; i++) {
@@ -87,24 +71,48 @@ async function run(){
     }
   }
 
+  console.log("drawing shapes");
+
   for(let i = 0; i < shapesPList.shapes.length; i++){
     if(shapesPList.kinds[i] === "circle"){
       const circle = shapesPList.shapes[i];
       const page = Math.floor(circle.rect[0][1] / pageHeight);
-      const y = circle.rect[0][1] % pageHeight + 2 + writingData["" + (page + 1)]["pageContentOrigin"][1] - vals[page].miny;
-      const x = circle.rect[0][0] + 17 + writingData["" + (page + 1)]["pageContentOrigin"][0] - vals[page].minx;
-      
+      const y = (circle.rect[0][1] % pageHeight) + 2 + writingData["" + (page + 1)]["pageContentOrigin"][1] - vals[page].miny + circle.rect[1][1]/2;
+      const x = circle.rect[0][0] + 17 + writingData["" + (page + 1)]["pageContentOrigin"][0] - vals[page].minx + circle.rect[1][0]/2;
       pdfDoc.getPage(page).drawEllipse({
         x,
-        y: pageHeight -y,
-        xScale: circle.rect[1][0],
-        yScale: circle.rect[1][1]
+        y: pageHeight - y,
+        xScale: circle.rect[1][0]/2,
+        yScale: circle.rect[1][1]/2,
+        borderWidth: circle.appearance.strokeWidth,
+        borderColor: rgb(circle.appearance.strokeColor.rgba[0], circle.appearance.strokeColor.rgba[1], circle.appearance.strokeColor.rgba[2]),
+        borderOpacity: circle.appearance.strokeColor.rgba[3],
+        color: undefined,
       });
-
       continue;
     }
-    const corners = shapesPList.shapes.rotatedRect.corners;
-    for(let j = 0; j < corners.length; j++){
+    
+    
+    const corners = shapesPList.shapes[i].points;
+    const shape = shapesPList.shapes[i];
+    for(let j = 0; j < corners.length + (shape.isClosed ? 0 : -1); j++){
+      let [x1, y1] = corners[j];
+      let [x2, y2] = corners[(j + 1) % corners.length];
+      
+      const page = Math.floor(y1 / pageHeight);
+      y1 %= pageHeight;
+      y2 %= pageHeight;
+      
+      const offsetX = 17 + writingData["" + (page + 1)]["pageContentOrigin"][0] - vals[page].minx;
+      const offsetY = 2 + writingData["" + (page + 1)]["pageContentOrigin"][1] - vals[page].miny;
+      
+      pdfDoc.getPage(page).drawLine({
+        start: { x: x1 + offsetX, y: pageHeight - y1 - offsetY}, // flip Y
+        end: { x: x2 + offsetX, y: pageHeight - y2 - offsetY},
+        thickness: shape.appearance.strokeWidth,
+        opacity: shape.appearance.strokeColor.rgba[3],
+        color: rgb(shape.appearance.strokeColor.rgba[0], shape.appearance.strokeColor.rgba[1], shape.appearance.strokeColor.rgba[2]),
+      });
       
     }
   }
