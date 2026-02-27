@@ -142,19 +142,36 @@ async function extract(file){
   //Replaces all UID with the correct data
   //const newObj = {};
   
-  const objsForReplacement = [];
+  let objsForReplacement = [obj];
   
-  for(const i of obj){
-    if(!((typeof i === "object") || (typeof i === "array"))){continue;}
-    objsForReplacement.push(i);
-  }
+  
+
+  //for(const i of obj){
+  //  if(!((typeof i === "object") || (typeof i === "array"))){continue;}
+  //  objsForReplacement.push(i);
+  //}
   
   while(objsForReplacement.length > 0){
     const tmp = [];
     for(const i of objsForReplacement){
+      if(typeof i === "array"){
+        for(let k = 0; k < i.length; k++){
+          const j = i[k];
+          if(typeof j !== "object" && typeof j !== "array"){continue;}
+          if(typeof j === "object" && j.UID !== undefined){i[k] = obj[j.UID]; continue;}
+          objsForReplacement.push(j);
+        }
+      }else if(typeof i === "object"){
+        for(const j in i){
+          if(typeof i[j] === "object" || typeof i[j] === "array"){objsForReplacement.push(i[j]);}
+          if(typeof i[j] === "array"){continue;}
+          if(i[j].UID === undefined){continue;}
+          i[j] = obj[i[j].UID];
+        }
       
+      }
     }
-  
+    objsForReplacement = tmp;
   }
   
   for(const i of obj){
