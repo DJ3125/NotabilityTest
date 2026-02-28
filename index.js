@@ -6,12 +6,26 @@ async function run(){
   const newObj = await extract("./Session.plist");
   //const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
   
-  await writeFile("./textbox.json", JSON.stringify(newObj, null, 2));
+  let minY = 100000000;
+  const textBoxes = newObj["NoteTakingSession"]["richText"]["mediaObjects"]["NS.objects"].map(i=>{
+    const locString = i["unscaledContentSize"].substring(1, i["unscaledContentSize"].length - 1);
+    const locString2 = i["documentContentOrigin"].substring(1, i["documentContentOrigin"].length - 1);
+    minY = Math.min(minY, parseFloat(locString2.substring(locString2.indexOf(",") + 1)));
+    return {
+      text: i["textStore"]["attributedString"]["NS.objects"][0],
+      x:parseFloat(locString2.substring(0, locString2.indexOf(","))),
+      y: parseFloat(locString2.substring(locString2.indexOf(",") + 1)),
+      width: parseFloat(locString.substring(0, locString.indexOf(","))),
+      height: parseFloat(locString.substring(locString.indexOf(",") + 1))
+    };
+  });
   
-  return;
+  //await writeFile("./textbox.json", JSON.stringify(newObj, null, 2));
+  
+  //return;
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
-  const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
+  //const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
 
   const pointSegmentsRaw = drawing["curvesnumpoints"];
   const pointsRaw = drawing["curvespoints"];
@@ -20,6 +34,25 @@ async function run(){
   
   const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
   const pageHeight = pdfDoc.getPage(0).getHeight();
+  
+  for(const i of textBoxes){
+    i.page = Math.floor(i.y/pageHeight);
+    i.y %= pageHeight;
+    
+    pdfDoc.getPage(i.page).drawText(i.text, {
+      x: i.x + 17,
+      y: pageHeight - i.y,
+      size: 12,
+      maxWidth: i.width,
+    
+    });
+  }
+  
+  const pdfBytes2 = await pdfDoc.save();
+  await writeFile("output_strokes.pdf", pdfBytes2);
+  console.log("PDF saved with strokes!");
+  
+  return;
   
   const vals = new Array(9);
   for(let i = 0; i < 9; i++){
@@ -136,7 +169,7 @@ async function run(){
 async function extract(file){
   const obj = (await bplist.parseFile(file))[0]["$objects"];
   
-  //await writeFile("./textboxRaw.json", JSON.stringify(obj, null, 2));
+  await writeFile("./textboxRaw.json", JSON.stringify(obj, null, 2));
   
   
   //Replaces all UID with the correct data
@@ -163,7 +196,7 @@ async function extract(file){
         }
       }else if(typeof i === "object"){
         for(const j in i){
-          if(typeof i[j] === "object" || typeof i[j] === "array"){objsForReplacement.push(i[j]);}
+          if((typeof i[j] === "object" && i[j].UID === undefined) || typeof i[j] === "array"){objsForReplacement.push(i[j]);}
           if(typeof i[j] === "array"){continue;}
           if(i[j].UID === undefined){continue;}
           i[j] = obj[i[j].UID];
