@@ -1,16 +1,1 @@
-{ 
-  "name": "notabilitytesting",
-  "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "DJ3125",
-  "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "bplist-parser": "^0.3.2",
-    "pdf-lib": "^1.17.1"
-  }
-}
+{"name":"notabilitytesting","version":"1.0.0","description":"","license":"ISC","author":"DJ3125","type":"module","main":"index.js","scripts":{"start":"node index.js"},"dependencies":{"bplist-parser":"^0.3.2","pdf-lib":"^1.17.1"}}

@@ -1,6 +1,15 @@
 import bplist from "bplist-parser";
 import {writeFile, readFile} from "node:fs/promises";
 import {PDFDocument, rgb} from "pdf-lib";
+import {
+  moveTo,
+  lineTo,
+  stroke,
+  setLineWidth,
+  setStrokingRgbColor,
+  setGraphicsState,
+} from "pdf-lib";
+
 
 async function run(){
   const newObj = await extract("./data/Session.plist");
@@ -17,7 +26,8 @@ async function run(){
   
   const pdfDoc = await PDFDocument.load(await readFile("./data/input.pdf"));
   const pageHeight = pdfDoc.getPage(0).getHeight();
-  const pageCorrection = 3.85;
+  const pageCorrection = 3.74;
+  
   
   console.log(pdfDoc.getPage(0).getWidth(), pageHeight)
   
@@ -63,7 +73,7 @@ async function run(){
         const x = pointsRaw.readFloatLE(index) + 16;
         
         const page = Math.floor((pointsRaw.readFloatLE(index+4)) / (pageHeight-pageCorrection));
-        const y = (pointsRaw.readFloatLE(index+4) + (1 - page) * pageCorrection/2 - 2);
+        const y = (pointsRaw.readFloatLE(index+4) + (1 - page) * pageCorrection/2 - 1);
         
         tmp.push({x, y, page});
         
@@ -84,30 +94,45 @@ async function run(){
   const rawColors = drawing["curvescolors"];
 
   console.log("drawing segments");
+for (let j = 0; j < segments.length; j++) {
+  const segment = segments[j];
 
-  for (let j = 0; j < segments.length; j++) {
-    const segment = segments[j];
-    const startPage = segment[0].page
-    for (let i = 0; i < segment.length - 1; i++) {
-      const start = segment[i];
-      const end = segment[i + 1];
+  const startPage = segment[0].page;
+  const page = pdfDoc.getPage(startPage);
 
-    //const offsetX = 17 + writingData["" + (start.page + 1)]["pageContentOrigin"][0] - vals[start.page].minx;
-    //const offsetY = 2 + writingData["" + (start.page + 1)]["pageContentOrigin"][1] - 0*vals[start.page].miny;
-      const offsetY = startPage * (pageHeight-pageCorrection);
-      pdfDoc.getPage(startPage).drawLine({
-        start: { x: start.x, y: pageHeight - start.y + offsetY}, // flip Y
-        end: { x: end.x, y: pageHeight - end.y + offsetY},
-        thickness: rawWidths.readFloatLE(j * 4),
-        color: rgb(
-          rawColors.readUint8(j * 4)/255,
-          rawColors.readUint8(j * 4 + 1)/255,
-          rawColors.readUint8(j * 4 + 2)/255
-        ),
-        opacity: rawColors.readUint8(j * 4 + 3)/255,
-      });
-    }
+  const width = rawWidths.readFloatLE(j * 4);
+
+  const r = rawColors.readUint8(j * 4) / 255;
+  const g = rawColors.readUint8(j * 4 + 1) / 255;
+  const b = rawColors.readUint8(j * 4 + 2) / 255;
+
+  const offsetY = startPage * (pageHeight - pageCorrection);
+
+  const ops = [];
+
+  // style
+  ops.push(setLineWidth(width));
+  ops.push(setStrokingRgbColor(r, g, b));
+
+  // move to first point
+  const first = segment[0];
+  ops.push(
+    moveTo(first.x, pageHeight - first.y + offsetY)
+  );
+
+  // connect all remaining points
+  for (let i = 1; i < segment.length; i++) {
+    const p = segment[i];
+    ops.push(
+      lineTo(p.x, pageHeight - p.y + offsetY)
+    );
   }
+
+  // stroke the whole path
+  ops.push(stroke());
+
+  page.pushOperators(...ops);
+}
 
   const pdfBytes2 = await pdfDoc.save();
   await writeFile("output_strokes.pdf", pdfBytes2);
