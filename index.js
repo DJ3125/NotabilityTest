@@ -3,26 +3,9 @@ import {writeFile, readFile} from "node:fs/promises";
 import {PDFDocument, rgb} from "pdf-lib";
 
 async function run(){
-  const newObj = await extract("./Session.plist");
-  //const writingData = (await bplist.parseFile("./index.plist"))[0].pages;
+  const newObj = await extract("./data/Session.plist");
   
-  let minY = 100000000;
-  const textBoxes = newObj["NoteTakingSession"]["richText"]["mediaObjects"]["NS.objects"].map(i=>{
-    const locString = i["unscaledContentSize"].substring(1, i["unscaledContentSize"].length - 1);
-    const locString2 = i["documentContentOrigin"].substring(1, i["documentContentOrigin"].length - 1);
-    minY = Math.min(minY, parseFloat(locString2.substring(locString2.indexOf(",") + 1)));
-    return {
-      text: i["textStore"]["attributedString"]["NS.objects"][0],
-      x:parseFloat(locString2.substring(0, locString2.indexOf(","))),
-      y: parseFloat(locString2.substring(locString2.indexOf(",") + 1)),
-      width: parseFloat(locString.substring(0, locString.indexOf(","))),
-      height: parseFloat(locString.substring(locString.indexOf(",") + 1))
-    };
-  });
-  
-  //await writeFile("./textbox.json", JSON.stringify(newObj, null, 2));
-  
-  //return;
+  const writingData = {} || (await bplist.parseFile("./data/index.plist"))[0].pages;
   
   const drawing = newObj["NoteTakingSession"]["richText"]["Handwriting Overlay"]["SpatialHash"];
   //const shapesPList = (await bplist.parseFile(drawing["shapes"]))[0];
@@ -32,8 +15,23 @@ async function run(){
   
   const segments = [];
   
-  const pdfDoc = await PDFDocument.load(await readFile("input.pdf"));
+  const pdfDoc = await PDFDocument.load(await readFile("./data/input.pdf"));
   const pageHeight = pdfDoc.getPage(0).getHeight();
+  const pageCorrection = 3.85;
+  
+  console.log(pdfDoc.getPage(0).getWidth(), pageHeight)
+  
+  const textBoxes = newObj["NoteTakingSession"]["richText"]["mediaObjects"]["NS.objects"].map(i=>{
+    const locString = i["unscaledContentSize"].substring(1, i["unscaledContentSize"].length - 1);
+    const locString2 = i["documentContentOrigin"].substring(1, i["documentContentOrigin"].length - 1);
+    return {
+      text: i["textStore"]["attributedString"]["NS.objects"][0],
+      x: parseFloat(locString2.substring(0, locString2.indexOf(","))),
+      y: parseFloat(locString2.substring(locString2.indexOf(",") + 1)),
+      width: parseFloat(locString.substring(0, locString.indexOf(","))),
+      height: parseFloat(locString.substring(locString.indexOf(",") + 1))
+    };
+  });
   
   for(const i of textBoxes){
     i.page = Math.floor(i.y/pageHeight);
@@ -48,14 +46,8 @@ async function run(){
     });
   }
   
-  const pdfBytes2 = await pdfDoc.save();
-  await writeFile("output_strokes.pdf", pdfBytes2);
-  console.log("PDF saved with strokes!");
-  
-  return;
-  
-  const vals = new Array(9);
-  for(let i = 0; i < 9; i++){
+  const vals = new Array(pdfDoc.getPages().length);
+  for(let i = 0; i < vals.length; i++){
     vals[i] = {};
     vals[i].minx = null;
     vals[i].miny = null;
@@ -68,9 +60,11 @@ async function run(){
     for(let i = 0; i < pointSegmentsRaw.length; i+=4){
       const tmp = [];
       for(let j = 0; j < pointSegmentsRaw.readUint32LE(i); j++){
-        const x = pointsRaw.readFloatLE(index);
-        const y = (pointsRaw.readFloatLE(index+4)) % pageHeight;
-        const page = Math.floor((pointsRaw.readFloatLE(index+4)) / pageHeight);
+        const x = pointsRaw.readFloatLE(index) + 16;
+        
+        const page = Math.floor((pointsRaw.readFloatLE(index+4)) / (pageHeight-pageCorrection));
+        const y = (pointsRaw.readFloatLE(index+4) + (1 - page) * pageCorrection/2 - 2);
+        
         tmp.push({x, y, page});
         
         vals[page].minx = vals[page].minx === null ? x : Math.min(x, vals[page].minx);
@@ -84,6 +78,8 @@ async function run(){
     }
   }
   
+  console.log(vals)
+  
   const rawWidths = drawing["curveswidth"];
   const rawColors = drawing["curvescolors"];
 
@@ -91,22 +87,33 @@ async function run(){
 
   for (let j = 0; j < segments.length; j++) {
     const segment = segments[j];
+    const startPage = segment[0].page
     for (let i = 0; i < segment.length - 1; i++) {
       const start = segment[i];
       const end = segment[i + 1];
- 
-      const offsetX = 17 + writingData["" + (start.page + 1)]["pageContentOrigin"][0] - vals[start.page].minx;
-      const offsetY = 2 + writingData["" + (start.page + 1)]["pageContentOrigin"][1] - vals[start.page].miny;
 
-      pdfDoc.getPage(start.page).drawLine({
-        start: { x: start.x + offsetX, y: pageHeight - start.y - offsetY}, // flip Y
-        end: { x: end.x + offsetX, y: pageHeight - end.y - offsetY},
+    //const offsetX = 17 + writingData["" + (start.page + 1)]["pageContentOrigin"][0] - vals[start.page].minx;
+    //const offsetY = 2 + writingData["" + (start.page + 1)]["pageContentOrigin"][1] - 0*vals[start.page].miny;
+      const offsetY = startPage * (pageHeight-pageCorrection);
+      pdfDoc.getPage(startPage).drawLine({
+        start: { x: start.x, y: pageHeight - start.y + offsetY}, // flip Y
+        end: { x: end.x, y: pageHeight - end.y + offsetY},
         thickness: rawWidths.readFloatLE(j * 4),
-        color: rgb(rawColors.readUint8(j * 4)/255, rawColors.readUint8(j * 4 + 1)/255, rawColors.readUint8(j * 4 + 2)/255),
+        color: rgb(
+          rawColors.readUint8(j * 4)/255,
+          rawColors.readUint8(j * 4 + 1)/255,
+          rawColors.readUint8(j * 4 + 2)/255
+        ),
         opacity: rawColors.readUint8(j * 4 + 3)/255,
       });
     }
   }
+
+  const pdfBytes2 = await pdfDoc.save();
+  await writeFile("output_strokes.pdf", pdfBytes2);
+  console.log("PDF saved with strokes!");
+  
+  return;
 
   console.log("drawing shapes");
 
@@ -224,6 +231,8 @@ async function extract(file){
     }
     newObj[i.$class.$classname] = i;
   }
+  
+  await writeFile("./newobj.json", JSON.stringify(newObj, null, 2));
   return newObj;
 }
 
